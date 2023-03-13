@@ -14,6 +14,11 @@ meta = MigrationMeta {mmNumber = 31, mmName = "Component", mmDescription = "Add 
 
 migrate :: Pool Connection -> LoggingT IO (Maybe Error)
 migrate dbPool = do
+  createComponentTable dbPool
+  addPhaseToPackage dbPool
+  extendBranch dbPool
+
+createComponentTable dbPool = do
   let sql =
         "CREATE TABLE component \
         \ ( \
@@ -28,6 +33,25 @@ migrate dbPool = do
         \  \
         \ CREATE UNIQUE INDEX component_name_uindex \
         \     ON component (name);"
+  let action conn = execute_ conn sql
+  liftIO $ withResource dbPool action
+  return Nothing
+
+addPhaseToPackage dbPool = do
+  let sql =
+        "ALTER TABLE package \
+        \   ADD phase varchar NOT NULL DEFAULT 'ReleasedPackagePhase';"
+  let action conn = execute_ conn sql
+  liftIO $ withResource dbPool action
+  return Nothing
+
+extendBranch dbPool = do
+  let sql =
+        "ALTER TABLE branch \
+        \   ADD version varchar NOT NULL DEFAULT '',\
+        \   ADD description varchar NOT NULL DEFAULT '',\
+        \   ADD readme varchar NOT NULL DEFAULT '',\
+        \   ADD license varchar NOT NULL DEFAULT '';"
   let action conn = execute_ conn sql
   liftIO $ withResource dbPool action
   return Nothing
