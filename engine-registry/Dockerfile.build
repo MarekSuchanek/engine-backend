@@ -1,0 +1,63 @@
+# -------------------------------------------------------------------------------------------
+FROM datastewardshipwizard/haskell-base:nightly-2023-03-05 as build
+
+WORKDIR /opt/build
+
+RUN mkdir -p /opt/build/bin \
+ && mkdir -p /opt/build/engine-shared/src \
+ && mkdir -p /opt/build/engine-registry/src \
+ && mkdir -p /opt/build/engine-wizard/src \
+ && mkdir -p /opt/build/engine-wizard-metamodel-migrator/src 
+
+COPY ./vendor /opt/build/vendor
+
+COPY ./stack.yaml ./stack.yaml
+COPY ./engine-registry/package.yaml ./engine-registry/package.yaml
+COPY ./engine-shared/package.yaml ./engine-shared/package.yaml
+COPY ./engine-wizard/package.yaml ./engine-wizard/package.yaml
+COPY ./engine-wizard-metamodel-migrator/package.yaml ./engine-wizard-metamodel-migrator/package.yaml
+
+RUN stack --jobs 1 build --system-ghc --dependencies-only engine-registry
+
+COPY ./engine-shared /opt/build/engine-shared
+
+RUN stack --jobs 1 build --system-ghc engine-shared
+
+COPY ./engine-registry /opt/build/engine-registry
+
+RUN stack --jobs 1 build --system-ghc engine-registry
+
+RUN mv "$(stack path --local-install-root --system-ghc)/bin/engine-registry" /opt/build/bin/engine-registry-bin
+
+# -------------------------------------------------------------------------------------------
+FROM ubuntu:22.04
+
+WORKDIR /application
+
+# Set up env
+ENV LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8
+
+HEALTHCHECK --interval=5m --timeout=10s \
+  CMD curl -f http://localhost:3000/ || exit 1
+
+# Install necessary libraries
+RUN apt-get update \
+ && apt-get -qq -y install libmemcached-dev ca-certificates netbase wget gdebi-core curl libpq5 libpq-dev \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -r user \
+ && useradd -r -g user user \
+ && mkdir -p /application/engine-registry/config \
+ && chown -R user:user /application
+
+# Switch to non-root user
+USER user
+
+# Add built exectutable binary
+COPY --from=build /opt/build/bin .
+
+# Add configs
+COPY --from=build /opt/build/engine-registry/config/application.yml /opt/build/engine-registry/config/build-info.yml /application/engine-registry/config/
+
+# Run the run script (preparations and engine-wizard-bin)
+CMD ["/application/engine-registry-bin"]

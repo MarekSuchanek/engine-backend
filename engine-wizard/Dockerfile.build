@@ -1,0 +1,52 @@
+# -------------------------------------------------------------------------------------------
+FROM haskell:9.4.4 as build
+
+RUN mkdir -p /opt/build/bin
+
+# GHC dynamically links its compilation targets to lib gmp
+RUN apt-get update \
+  && apt-get download libgmp10
+RUN mv libgmp*.deb libgmp.deb
+
+COPY . /opt/build/
+
+WORKDIR /opt/build
+
+RUN stack build --system-ghc --dependencies-only engine-wizard
+
+RUN stack build --system-ghc engine-wizard
+
+RUN mv "$(stack path --local-install-root --system-ghc)/bin/engine-wizard" /opt/build/bin/engine-wizard-bin
+
+# -------------------------------------------------------------------------------------------
+FROM ubuntu:22.04
+
+WORKDIR /application
+
+# Set up env
+ENV LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8
+
+HEALTHCHECK --interval=5m --timeout=10s \
+  CMD curl -f http://localhost:3000/ || exit 1
+
+# Install necessary libraries
+RUN apt-get update \
+ && apt-get -qq -y install libmemcached-dev ca-certificates netbase wget curl libpq5 libpq-dev \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -r user \
+ && useradd -r -g user user \
+ && mkdir -p /application/engine-wizard/config \
+ && chown -R user:user /application
+
+# Switch to non-root user
+USER user
+
+# Add configs
+COPY --from=build /opt/build/engine-wizard/config/application.yml /opt/build/engine-wizard/config/integration.yml /opt/build/engine-wizard/config/build-info.yml /application/engine-wizard/config/
+
+# Add built exectutable binary and run script
+COPY --from=build /opt/build/bin .
+
+# Run the run script (preparations and engine-wizard-bin)
+CMD ["/application/engine-wizard-bin"]
