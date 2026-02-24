@@ -2,15 +2,15 @@ name: Build
 
 on:
   push:
-  schedule:
-  - cron: '0 2 * * *'
+  # schedule:
+  # - cron: '0 2 * * *'
 
 jobs:
   btp:
     name: Build-Tag-Push
     runs-on: ubuntu-22.04
 
-    if: github.repository == 'ds-wizard/engine-backend'
+    # if: github.repository == 'ds-wizard/engine-backend'
 
     strategy:
       matrix:
@@ -20,7 +20,6 @@ jobs:
     env:
       COMPONENT: ${{ matrix.component }}
       IMAGE_NAME: ${{ matrix.component }}-server
-      PUBLIC_IMAGE_PREFIX: datastewardshipwizard
       DOCKER_META_CONTEXT: './${{ matrix.component }}-server'
       DOCKER_META_FILE: './${{ matrix.component }}-server/Dockerfile'
       DOCKER_META_PLATFORMS: 'linux/amd64'
@@ -220,7 +219,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          ${{ env.PUBLIC_IMAGE_PREFIX }}/${{ env.IMAGE_NAME }}
+          ${{ env.IMAGE_NAME }}
         tags: |
           type=sha
 
@@ -264,28 +263,28 @@ jobs:
         tags: ${{ steps.meta-dev.outputs.tags }}
         labels: ${{ steps.meta-dev.outputs.labels }}
 
-# (4.4) -> Docker build+push (public)
-    - name: Docker meta [public]
-      id: meta-public
-      if: github.event_name != 'pull_request'
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          ${{ env.PUBLIC_IMAGE_PREFIX }}/${{ env.IMAGE_NAME }}
-          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+# # (4.4) -> Docker build+push (public)
+#     - name: Docker meta [public]
+#       id: meta-public
+#       if: github.event_name != 'pull_request'
+#       uses: docker/metadata-action@v5
+#       with:
+#         images: |
+#           ${{ env.PUBLIC_IMAGE_PREFIX }}/${{ env.IMAGE_NAME }}
+#           ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}
+#         tags: |
+#           type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+#           type=semver,pattern={{version}}
+#           type=semver,pattern={{major}}.{{minor}}
+#           type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
 
-    - name: Docker build+push [public]
-      uses: docker/build-push-action@v5
-      if: github.event_name != 'pull_request' && steps.meta-public.outputs.tags != ''
-      with:
-        context: ${{ env.DOCKER_META_CONTEXT }}
-        file: ${{ env.DOCKER_META_FILE }}
-        platforms: ${{ env.DOCKER_META_PLATFORMS }}
-        push: true
-        tags: ${{ steps.meta-public.outputs.tags }}
-        labels: ${{ steps.meta-public.outputs.labels }}
+#     - name: Docker build+push [public]
+#       uses: docker/build-push-action@v5
+#       if: github.event_name != 'pull_request' && steps.meta-public.outputs.tags != ''
+#       with:
+#         context: ${{ env.DOCKER_META_CONTEXT }}
+#         file: ${{ env.DOCKER_META_FILE }}
+#         platforms: ${{ env.DOCKER_META_PLATFORMS }}
+#         push: true
+#         tags: ${{ steps.meta-public.outputs.tags }}
+#         labels: ${{ steps.meta-public.outputs.labels }}
